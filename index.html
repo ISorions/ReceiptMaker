@@ -1,0 +1,503 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Receipt Maker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Archivo:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: menu with small photos on the left (tap to add), a live thermal-paper receipt on the right. Stacks on phones. */
+:root {
+  --bg: #efe9d9;
+  --fg: #1f2a1c;
+  --muted: #6a6a58;
+  --panel: #f8f3e4;
+  --line: #d6cdb2;
+  --accent: #3f6b34;
+  --accent-fg: #ffffff;
+  --star: #c9921a;
+  --paper: #fbfaf6;
+  --ink: #232220;
+  --ink-soft: #6f6b63;
+  --shadow: rgba(40, 32, 20, 0.28);
+  --font-ui: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-receipt: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1a1d17;
+    --fg: #eceadd;
+    --muted: #a6a692;
+    --panel: #242820;
+    --line: #3b4033;
+    --accent: #8fbf7f;
+    --accent-fg: #14180f;
+    --star: #e6b64a;
+    --paper: #ece8dd;
+    --ink: #232220;
+    --ink-soft: #6f6b63;
+    --shadow: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1a1d17;
+  --fg: #eceadd;
+  --muted: #a6a692;
+  --panel: #242820;
+  --line: #3b4033;
+  --accent: #8fbf7f;
+  --accent-fg: #14180f;
+  --star: #e6b64a;
+  --paper: #ece8dd;
+  --ink: #232220;
+  --ink-soft: #6f6b63;
+  --shadow: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.45;
+  padding-block: 32px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 340px);
+  gap: 40px;
+  align-items: start;
+}
+@media (max-width: 780px) {
+  .wrap { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+}
+.stage { position: sticky; top: 24px; display: flex; justify-content: center; }
+@media (max-width: 780px) { .stage { position: static; } }
+
+h1 { font-size: 28px; line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 6px; text-wrap: balance; }
+.lede { color: var(--muted); margin: 0 0 22px; }
+
+.fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 26px; }
+@media (max-width: 480px) { .fields { grid-template-columns: minmax(0, 1fr); } }
+.field { display: grid; gap: 6px; min-width: 0; }
+label, .menu-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+input {
+  width: 100%;
+  font: inherit;
+  font-size: 16px;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 11px 12px;
+  min-width: 0;
+}
+input:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.menu-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.legend { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.legend svg { width: 16px; height: 16px; fill: var(--star); }
+.favstar svg { width: 14px; height: 14px; fill: var(--star); vertical-align: -2px; }
+.menu { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+
+.card { position: relative; }
+.pick {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  text-align: left;
+  font: inherit;
+  color: var(--fg);
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.pick:hover { border-color: var(--accent); }
+.card.on .pick { border-color: var(--accent); }
+.photo { width: 88px; flex: none; overflow: hidden; background: var(--line); }
+.photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.info { padding: 10px 14px; display: grid; gap: 2px; align-content: center; flex: 1; min-width: 0; }
+.card.on .info { padding-right: 104px; }
+.pname { font-weight: 700; font-size: 15px; line-height: 1.2; }
+.pdesc { font-size: 13px; color: var(--muted); }
+.pprice { font-weight: 700; font-size: 17px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.badge {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 12px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 9px;
+  border-radius: 15px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 700;
+  font-size: 14px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.card.on .badge { display: inline-flex; }
+.minus {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  right: 54px;
+  width: 34px;
+  height: 34px;
+  border-radius: 17px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: #232220;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0 3px;
+}
+.card.on .minus { display: inline-flex; }
+
+.runbar { margin-top: 16px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.runtotal { font-weight: 600; font-variant-numeric: tabular-nums; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+button.btn {
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--fg);
+}
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.status { min-height: 1.4em; font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+
+/* Receipt */
+.paper-wrap { filter: drop-shadow(0 10px 18px var(--shadow)); width: 100%; max-width: 340px; }
+.receipt {
+  --s: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-receipt);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 30px 22px 34px;
+  -webkit-mask:
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / var(--s) 51% repeat-x,
+    conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / var(--s) 51% repeat-x;
+  mask:
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) bottom / var(--s) 51% repeat-x,
+    conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) top / var(--s) 51% repeat-x;
+}
+.r-head { text-align: center; }
+.r-shop { font-size: 17px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; overflow-wrap: anywhere; }
+.r-title { letter-spacing: 0.3em; color: var(--ink-soft); margin-top: 2px; }
+.rule { border: 0; border-top: 1px dashed var(--ink-soft); margin: 14px 0; }
+.meta { display: grid; gap: 2px; }
+.line { display: flex; justify-content: space-between; gap: 12px; }
+.line span:last-child { text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.line span:first-child { color: var(--ink-soft); flex: none; }
+.items { display: grid; gap: 8px; }
+.item { display: grid; grid-template-columns: 3.2ch minmax(0, 1fr) auto; gap: 6px; align-items: start; font-variant-numeric: tabular-nums; }
+.item .nm { overflow-wrap: anywhere; text-transform: uppercase; }
+.item .amt { text-align: right; }
+.empty { text-align: center; color: var(--ink-soft); }
+.total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-weight: 600; font-size: 19px; font-variant-numeric: tabular-nums; }
+.total .amt { overflow-wrap: anywhere; text-align: right; }
+.thanks { text-align: center; letter-spacing: 0.12em; text-transform: uppercase; font-size: 12px; }
+.barcode { height: 38px; margin: 14px auto 4px; width: 80%; display: flex; align-items: stretch; }
+.barcode i { display: block; background: var(--ink); height: 100%; }
+.codenum { text-align: center; font-size: 11px; letter-spacing: 0.2em; color: var(--ink-soft); }
+</style>
+
+<main class="wrap">
+  <section>
+    <h1>Receipt Maker</h1>
+    <p class="lede">Tap a packet to add it. Tap again for more, or use the minus button to remove one.</p>
+
+    <div class="fields">
+      <div class="field">
+        <label for="name">Name</label>
+        <input id="name" type="text" value="" placeholder="Customer name" maxlength="60" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="shop">Shop name (optional)</label>
+        <input id="shop" type="text" value="" placeholder="Shop name" maxlength="40" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="menu-head">
+      <span class="menu-label">Menu</span>
+      <span class="legend">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l2.6 7.9 7.9 2.6-7.9 2.6L12 22.5l-2.6-7.9L1.5 12l7.9-2.6z"/></svg>
+        Favorite
+      </span>
+    </div>
+    <div class="menu" id="menu"></div>
+
+    <div class="runbar">
+      <span class="runtotal" id="run"></span>
+      <div class="actions">
+        <button type="button" class="btn" id="clear">Clear</button>
+        <button type="button" class="btn" id="renew">New number</button>
+        <button type="button" class="btn primary" id="copy">Copy receipt text</button>
+      </div>
+    </div>
+    <p class="status" id="status" role="status"></p>
+  </section>
+
+  <section class="stage" aria-label="Receipt preview">
+    <div class="paper-wrap">
+      <div class="receipt" id="receipt">
+        <div class="r-head">
+          <div class="r-shop" id="o-shop"></div>
+          <div class="r-title">RECEIPT</div>
+        </div>
+        <hr class="rule">
+        <div class="meta">
+          <div class="line"><span>No.</span><span id="o-no"></span></div>
+          <div class="line"><span>Date</span><span id="o-date"></span></div>
+          <div class="line"><span>Name</span><span id="o-name"></span></div>
+        </div>
+        <hr class="rule">
+        <div class="items" id="o-items"></div>
+        <hr class="rule">
+        <div class="total"><span>TOTAL</span><span class="amt" id="o-total"></span></div>
+        <hr class="rule">
+        <div class="thanks">Thank you</div>
+        <div class="barcode" id="barcode" aria-hidden="true"></div>
+        <div class="codenum" id="o-code"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(function () {
+  var MENU = [
+    { id: "p2", name: "Paket 2", desc: "Adaan 10 Pcs", price: 16, img: "img/p2.jpg", fav: true },
+    { id: "p3", name: "Paket 3", desc: "2 Lenjer Besar", price: 13, img: "img/p3.jpg" },
+    { id: "p4", name: "Paket 4", desc: "1 Kapal Selam + 1 Lenjer", price: 14, img: "img/p4.jpg" },
+    { id: "p5", name: "Paket 5", desc: "2 Kapal Selam", price: 15, img: "img/p5.jpg" }
+  ];
+  var qty = { p2: 1, p3: 0, p4: 0, p5: 0 };
+  var receiptNo = "";
+  var $ = function (id) { return document.getElementById(id); };
+
+  function money(v) {
+    return "$" + v.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function newNo() {
+    var n = "";
+    for (var i = 0; i < 6; i++) n += Math.floor(Math.random() * 10);
+    receiptNo = n;
+  }
+  function fmtDate() {
+    var d = new Date();
+    return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "2-digit" }) + " " +
+      d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+
+  /* Menu cards */
+  var STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l2.6 7.9 7.9 2.6-7.9 2.6L12 22.5l-2.6-7.9L1.5 12l7.9-2.6z"/></svg>';
+  function buildMenu() {
+    var host = $("menu");
+    MENU.forEach(function (m) {
+      var card = document.createElement("div");
+      card.className = "card";
+      card.id = "card-" + m.id;
+
+      var pick = document.createElement("button");
+      pick.type = "button";
+      pick.className = "pick";
+      pick.id = "pick-" + m.id;
+      pick.innerHTML =
+        '<span class="photo"><img src="' + m.img + '" alt="" loading="lazy"></span>' +
+        '<span class="info"><span class="pname">' + m.name + (m.fav ? ' <span class="favstar" title="Favorite">' + STAR + '</span>' : '') + '</span>' +
+        '<span class="pdesc">' + m.desc + '</span>' +
+        '<span class="pprice">' + money(m.price) + '</span></span>';
+      pick.addEventListener("click", function () { qty[m.id] += 1; render(); });
+
+      var badge = document.createElement("span");
+      badge.className = "badge";
+      badge.id = "badge-" + m.id;
+      badge.setAttribute("aria-hidden", "true");
+
+      var minus = document.createElement("button");
+      minus.type = "button";
+      minus.className = "minus";
+      minus.id = "minus-" + m.id;
+      minus.textContent = "−";
+      minus.setAttribute("aria-label", "Remove one " + m.name);
+      minus.addEventListener("click", function () { if (qty[m.id] > 0) qty[m.id] -= 1; render(); });
+
+      card.appendChild(pick);
+      card.appendChild(badge);
+      card.appendChild(minus);
+      host.appendChild(card);
+    });
+  }
+
+  function lines() {
+    return MENU.filter(function (m) { return qty[m.id] > 0; });
+  }
+  function total() {
+    return MENU.reduce(function (s, m) { return s + qty[m.id] * m.price; }, 0);
+  }
+
+  function drawBarcode(seed) {
+    var host = $("barcode");
+    host.textContent = "";
+    var x = 0;
+    for (var i = 0; i < seed.length; i++) x = (x * 31 + seed.charCodeAt(i)) >>> 0;
+    var sum = 0, bars = [];
+    for (var j = 0; j < 46; j++) {
+      x = (x * 1664525 + 1013904223) >>> 0;
+      var w = 1 + (x % 3), gap = 1 + ((x >> 4) % 2);
+      bars.push([w, gap]);
+      sum += w + gap;
+    }
+    bars.forEach(function (b) {
+      var bar = document.createElement("i");
+      bar.style.width = (b[0] / sum * 100) + "%";
+      bar.style.marginRight = (b[1] / sum * 100) + "%";
+      host.appendChild(bar);
+    });
+  }
+
+  function render() {
+    var count = 0;
+    MENU.forEach(function (m) {
+      var q = qty[m.id];
+      count += q;
+      $("card-" + m.id).classList.toggle("on", q > 0);
+      $("badge-" + m.id).textContent = "×" + q;
+      $("pick-" + m.id).setAttribute("aria-label",
+        "Add " + m.name + ", " + m.desc + ", " + money(m.price) + ". Currently " + q + " selected.");
+    });
+    var t = total();
+    $("run").textContent = count + (count === 1 ? " item" : " items") + " · " + money(t);
+
+    var shopTxt = $("shop").value.trim();
+    $("o-shop").textContent = shopTxt;
+    $("o-shop").hidden = !shopTxt;
+    $("o-no").textContent = "#" + receiptNo;
+    $("o-date").textContent = fmtDate();
+    $("o-name").textContent = $("name").value.trim() || "-";
+
+    var host = $("o-items");
+    host.textContent = "";
+    var ls = lines();
+    if (!ls.length) {
+      var e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = "No items yet";
+      host.appendChild(e);
+    }
+    ls.forEach(function (m) {
+      var row = document.createElement("div");
+      row.className = "item";
+      var a = document.createElement("span"); a.textContent = qty[m.id] + "×";
+      var b = document.createElement("span"); b.className = "nm"; b.textContent = m.name + " (" + m.desc + ")";
+      var c = document.createElement("span"); c.className = "amt"; c.textContent = money(qty[m.id] * m.price);
+      row.appendChild(a); row.appendChild(b); row.appendChild(c);
+      host.appendChild(row);
+    });
+
+    $("o-total").textContent = money(t);
+    $("o-code").textContent = receiptNo + "0" + receiptNo.split("").reverse().join("");
+    drawBarcode(receiptNo + count + t);
+  }
+
+  function plainText() {
+    var w = 34;
+    function rep(ch, n) { return new Array(Math.max(0, n) + 1).join(ch); }
+    function pad(l, r) { return l + rep(" ", Math.max(1, w - l.length - r.length)) + r; }
+    function center(t) { return rep(" ", Math.floor((w - t.length) / 2)) + t; }
+    var dash = rep("-", w);
+    var out = [];
+    if ($("o-shop").textContent) out.push(center($("o-shop").textContent.toUpperCase()));
+    out.push(
+      center("RECEIPT"),
+      dash,
+      pad("No.", $("o-no").textContent),
+      pad("Date", $("o-date").textContent),
+      pad("Name", $("o-name").textContent),
+      dash
+    );
+    var ls = lines();
+    if (!ls.length) out.push("No items yet");
+    ls.forEach(function (m) {
+      out.push(qty[m.id] + "x " + m.name + " (" + m.desc + ")");
+      out.push(pad("", money(qty[m.id] * m.price)));
+    });
+    out.push(dash, pad("TOTAL", money(total())), dash, center("THANK YOU"));
+    return out.join("\n");
+  }
+
+  function say(msg) {
+    var s = $("status");
+    s.textContent = msg;
+    setTimeout(function () { if (s.textContent === msg) s.textContent = ""; }, 2600);
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) {}
+    document.body.removeChild(ta);
+    return ok;
+  }
+
+  $("copy").addEventListener("click", function () {
+    var text = plainText();
+    var done = function () { say("Receipt text copied."); };
+    var fail = function () {
+      say(fallbackCopy(text) ? "Receipt text copied." : "Copy was blocked. Take a screenshot of the receipt instead.");
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fail);
+    } else { fail(); }
+  });
+  $("clear").addEventListener("click", function () {
+    MENU.forEach(function (m) { qty[m.id] = 0; });
+    render();
+  });
+  $("renew").addEventListener("click", function () { newNo(); render(); });
+  ["name", "shop"].forEach(function (id) { $(id).addEventListener("input", render); });
+
+  newNo();
+  buildMenu();
+  render();
+})();
+</script>
+
+</body></html>
